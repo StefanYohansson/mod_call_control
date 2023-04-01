@@ -218,7 +218,7 @@ static void webhook_event_handler(switch_event_t *event)
 	return;
 }
 
-static switch_status_t start_webhook_for_session(switch_core_session_t *session, char *webhook_url)
+static switch_status_t start_session_webhook(switch_core_session_t *session, char *webhook_url)
 {
 	cc_task_t *task = NULL;
 	const char *session_uuid = NULL;
@@ -260,13 +260,11 @@ static switch_status_t start_webhook_for_session(switch_core_session_t *session,
 	switch_mutex_lock(globals.hash_mutex);
 	switch_core_hash_insert(globals.tasks_hash, task->uuid, task);
 	switch_mutex_unlock(globals.hash_mutex);
-	
-	switch_core_session_rwunlock(session);
 
 	return SWITCH_STATUS_SUCCESS;
 }
 
-static switch_status_t stop_webhook_for_session(switch_core_session_t *session)
+static switch_status_t stop_session_webhook(switch_core_session_t *session)
 {
 	cc_task_t *task = NULL;
 	const char *session_uuid = NULL;
@@ -298,9 +296,31 @@ static switch_status_t stop_webhook_for_session(switch_core_session_t *session)
 	return SWITCH_STATUS_SUCCESS;
 }
 
+static void webhooks_status(switch_stream_handle_t *stream)
+{
+	switch_hash_index_t *hi;
+	void *val;
+	const void *vvar;
+	cc_task_t *task = NULL;
+	const char *line = "=================================================================================================\n";
+
+	switch_mutex_lock(globals.hash_mutex);
+	// @TODO: fix line tabs here
+	stream->write_function(stream, "%25s\t%s\t  %40s\t%s\n", "UUID", "Webhook URL", "Fail Count", "Running");
+	stream->write_function(stream, line);
+	for (hi = switch_core_hash_first(globals.tasks_hash); hi; hi = switch_core_hash_next(&hi)) {
+		switch_core_hash_this(hi, &vvar, NULL, &val);
+		task = (cc_task_t *) val;
+
+		stream->write_function(stream, "%25s\t%s\t  %d\t%s\n", task->uuid, task->webhook_uri, task->fail_count, task->running ? "Yes" : "No");
+	}
+	stream->write_function(stream, line);
+	switch_mutex_unlock(globals.hash_mutex);
+}
+
 SWITCH_STANDARD_APP(call_control_app_function)
 {
-	start_webhook_for_session(session, (char *)data);
+	start_session_webhook(session, (char *)data);
 }
 
 SWITCH_STANDARD_API(call_control_function)
@@ -314,7 +334,7 @@ SWITCH_STANDARD_API(call_control_function)
 		"--------------------------------------------------------------------------------\n"
 		"call_control start <uuid> <webhook>\n"
 		"call_control stop <uuid> <webhook>\n"
-		"call_control status\n"
+		"call_control status all\n"
 		"--------------------------------------------------------------------------------\n";
 
 	if (zstr(cmd)) {
@@ -347,22 +367,26 @@ SWITCH_STANDARD_API(call_control_function)
 				if (argc > 1 && !zstr(argv[2])) {
 					webhook_url = argv[2];
 				}
-				if (start_webhook_for_session(session, webhook_url) == SWITCH_STATUS_FALSE) {
+				if (start_session_webhook(session, webhook_url) == SWITCH_STATUS_FALSE) {
 					stream->write_function(stream, "-ERR Cannot start for this session\n");
 				} else {
 					stream->write_function(stream, "+OK Call Control started for uuid\n");
 				}
+
+				switch_core_session_rwunlock(session);
 			} else {
 				stream->write_function(stream, "-ERR UUID not found\n");
 				goto done;
 			}
 		} else if (!strcasecmp(argv[0], "stop")) {
-			if (stop_webhook_for_session(session) == SWITCH_STATUS_FALSE) {
+			if (stop_session_webhook(session) == SWITCH_STATUS_FALSE) {
 				stream->write_function(stream, "-ERR Cannot stop for this session\n");
 			} else {
 				stream->write_function(stream, "+OK Call Control stopped for uuid\n");
 			}
 			goto done;
+		} else if (!strcasecmp(argv[0], "status")) {
+			webhooks_status(stream);
 		} else {
 			stream->write_function(stream, "%s", usage_string);
 			goto done;
