@@ -187,16 +187,14 @@ static void webhook_event_handler(switch_event_t *event)
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Dispatching json %s\n", uuid, event_name, json_str);
 				if ((res = switch_curl_easy_perform(curl))) {
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Curl Result %d, Error: %s\n", res, errbuf);
+
+					task->fail_count = task->fail_count + 1;
 				} else {
 					switch_curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &rescode);
 
 					if (rescode != 200) {
 						//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "[%s] [%s] Event delivery failed with HTTP code %ld, %s\n", uuid, event_name, rescode, rd.data);
 						task->fail_count = task->fail_count + 1;
-						if (task->fail_count >= MAX_FAIL_COUNT && task->running == 1) {
-							switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "[%s] [%s] Reached max retries to reach webhook %s, stopping task...\n", uuid, event_name, task->webhook_uri);
-							task->running = 0;
-						}
 					}
 				}
 			} else {
@@ -204,6 +202,11 @@ static void webhook_event_handler(switch_event_t *event)
 			}
 		} else {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Event not allowed in whitelist, ignoring...\n", uuid, event_name);
+		}
+
+		if (task->fail_count >= MAX_FAIL_COUNT && task->running == 1) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "[%s] [%s] Reached max retries to reach webhook %s, stopping task...\n", uuid, event_name, task->webhook_uri);
+			task->running = 0;
 		}
 		switch_mutex_unlock(task->mutex);
 	}
