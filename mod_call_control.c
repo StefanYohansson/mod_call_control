@@ -218,10 +218,93 @@ static void webhook_event_handler(switch_event_t *event)
 	return;
 }
 
-SWITCH_STANDARD_API(call_control_function)
+static switch_status_t start_webhook_for_session(switch_core_session_t *session, char *webhook_url)
 {
 	cc_task_t *task = NULL;
+	const char *session_uuid = NULL;
 	switch_memory_pool_t *task_pool;
+	ks_uuid_t uuid_secret;
+
+	if (!session || zstr(webhook_url)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	session_uuid = switch_core_session_get_uuid(session);
+
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Found session to start call control on it\n");
+	switch_mutex_lock(globals.hash_mutex);
+	if ((task = switch_core_hash_find(globals.tasks_hash, session_uuid))) {
+		switch_mutex_unlock(globals.hash_mutex);
+		return SWITCH_STATUS_FALSE;
+	}
+	switch_mutex_unlock(globals.hash_mutex);
+
+	switch_core_new_memory_pool(&task_pool);
+	ks_uuid(&uuid_secret);
+
+	task = (cc_task_t *) switch_core_alloc(task_pool, sizeof(*task));
+	task->pool = task_pool;
+	switch_mutex_init(&task->mutex, SWITCH_MUTEX_NESTED, task->pool);
+	task->webhook_uri = NULL;
+	task->uuid = switch_core_strdup(task->pool, session_uuid);
+	task->uuid_secret = ks_uuid_str(NULL, &uuid_secret);
+	task->session = session;
+	task->running = 1;
+	task->fail_count = 0;
+
+	if (!zstr(webhook_url)) {
+		task->webhook_uri = switch_core_strdup(task->pool, webhook_url);
+	}
+
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Adding task to the hash\n");
+	switch_mutex_lock(globals.hash_mutex);
+	switch_core_hash_insert(globals.tasks_hash, task->uuid, task);
+	switch_mutex_unlock(globals.hash_mutex);
+	
+	switch_core_session_rwunlock(session);
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
+static switch_status_t stop_webhook_for_session(switch_core_session_t *session)
+{
+	cc_task_t *task = NULL;
+	const char *session_uuid = NULL;
+
+	if (!session) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	session_uuid = switch_core_session_get_uuid(session);
+
+	switch_mutex_lock(globals.hash_mutex);
+	if ((task = switch_core_hash_find(globals.tasks_hash, session_uuid))) {
+		switch_mutex_unlock(globals.hash_mutex);
+		return SWITCH_STATUS_FALSE;
+	}
+	switch_mutex_unlock(globals.hash_mutex);
+
+	switch_mutex_lock(task->mutex);
+	if (task->running == 1) {
+		task->running = 0;
+	}
+	switch_mutex_unlock(task->mutex);
+
+	switch_core_destroy_memory_pool(&task->pool);
+	switch_mutex_lock(globals.hash_mutex);
+	switch_core_hash_delete(globals.tasks_hash, task->uuid);
+	switch_mutex_unlock(globals.hash_mutex);
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
+SWITCH_STANDARD_APP(call_control_app_function)
+{
+	start_webhook_for_session(session, (char *)data);
+}
+
+SWITCH_STANDARD_API(call_control_function)
+{
 	char *argv[1024] = { 0 };
 	int argc = 0;
 	char *mycmd = NULL;
@@ -232,7 +315,6 @@ SWITCH_STANDARD_API(call_control_function)
 		"call_control start <uuid> <webhook>\n"
 		"call_control stop <uuid> <webhook>\n"
 		"call_control status\n"
-		"call_control list [debug]\n"
 		"--------------------------------------------------------------------------------\n";
 
 	if (zstr(cmd)) {
@@ -258,65 +340,28 @@ SWITCH_STANDARD_API(call_control_function)
 	if (!zstr(argv[0]) && !zstr(argv[1])) {
 		if (!strcasecmp(argv[0], "start")) {
 			switch_core_session_t *session = NULL;
-			ks_uuid_t uuid_secret;
 
 			if ((session = switch_core_session_locate(argv[1]))) {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Found session to start call control on it\n");
-				switch_mutex_lock(globals.hash_mutex);
-				if ((task = switch_core_hash_find(globals.tasks_hash, argv[1]))) {
-					stream->write_function(stream, "-ERR Call Control is already started for this UUID\n");
-					switch_mutex_unlock(globals.hash_mutex);
-					goto done;
-				}
-				switch_mutex_unlock(globals.hash_mutex);
-
-				switch_core_new_memory_pool(&task_pool);
-				ks_uuid(&uuid_secret);
-
-				task = (cc_task_t *) switch_core_alloc(task_pool, sizeof(*task));
-				task->pool = task_pool;
-				switch_mutex_init(&task->mutex, SWITCH_MUTEX_NESTED, task->pool);
-				task->webhook_uri = NULL;
-				task->uuid = switch_core_strdup(task->pool, argv[1]);
-				task->uuid_secret = ks_uuid_str(NULL, &uuid_secret);
-				task->session = session;
-				task->running = 1;
-				task->fail_count = 0;
+				char *webhook_url = NULL;
 
 				if (argc > 1 && !zstr(argv[2])) {
-					task->webhook_uri = switch_core_strdup(task->pool, argv[2]);
+					webhook_url = argv[2];
 				}
-
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Adding task to the hash\n");
-				switch_mutex_lock(globals.hash_mutex);
-				switch_core_hash_insert(globals.tasks_hash, task->uuid, task);
-				switch_mutex_unlock(globals.hash_mutex);
-
-				switch_core_session_rwunlock(session);
+				if (start_webhook_for_session(session, webhook_url) == SWITCH_STATUS_FALSE) {
+					stream->write_function(stream, "-ERR Cannot start for this session\n");
+				} else {
+					stream->write_function(stream, "+OK Call Control started for uuid\n");
+				}
 			} else {
 				stream->write_function(stream, "-ERR UUID not found\n");
 				goto done;
 			}
 		} else if (!strcasecmp(argv[0], "stop")) {
-			switch_mutex_lock(globals.hash_mutex);
-			if ((task = switch_core_hash_find(globals.tasks_hash, argv[1]))) {
-				stream->write_function(stream, "-ERR Call Control is already started for this UUID\n");
-				switch_mutex_unlock(globals.hash_mutex);
-				goto done;
+			if (stop_webhook_for_session(session) == SWITCH_STATUS_FALSE) {
+				stream->write_function(stream, "-ERR Cannot stop for this session\n");
+			} else {
+				stream->write_function(stream, "+OK Call Control stopped for uuid\n");
 			}
-			switch_mutex_unlock(globals.hash_mutex);
-
-			switch_mutex_lock(task->mutex);
-			if (task->running == 1) {
-				task->running = 0;
-			}
-			switch_mutex_unlock(task->mutex);
-
-			switch_core_destroy_memory_pool(&task->pool);
-			switch_mutex_lock(globals.hash_mutex);
-			switch_core_hash_delete(globals.tasks_hash, task->uuid);
-			switch_mutex_unlock(globals.hash_mutex);
-
 			goto done;
 		} else {
 			stream->write_function(stream, "%s", usage_string);
@@ -336,6 +381,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 {
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
 	switch_api_interface_t *api_interface;
+	switch_application_interface_t *app_interface;
 
 	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
 
@@ -354,6 +400,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 	}
 
 	SWITCH_ADD_API(api_interface, "call_control", "Call Control API", call_control_function, "<command> <uuid> <webhook>");
+	SWITCH_ADD_APP(app_interface, "call_control", "Start Call Control for current session", "", call_control_app_function, "<webhook>", SAF_NONE);
 	switch_console_set_complete("add call_control start <uuid> <webhook>");
 	switch_console_set_complete("add call_control stop <uuid> <webhook>");
 
