@@ -4,7 +4,7 @@ MODNAME = mod_call_control
 
 if HAVE_KS
 mod_LTLIBRARIES = mod_call_control.la
-mod_call_control_la_SOURCES  = mod_call_control.c
+mod_call_control_la_SOURCES  = mod_call_control.c call_control_webhook.c
 mod_call_control_la_CFLAGS   = $(AM_CFLAGS)
 mod_call_control_la_CFLAGS  += $(CURL_CFLAGS) $(KS_CFLAGS)
 mod_call_control_la_LIBADD   = $(switch_builddir)/libfreeswitch.la

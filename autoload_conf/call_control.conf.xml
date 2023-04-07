@@ -1,0 +1,7 @@
+<configuration name="call_control.conf" description="Call Control module">
+  <settings>
+    <param name="cc-api-host" value="$${local_ip_v4}"/>
+    <param name="cc-api-port" value="9001"/>
+    <param name="cc-api-external" value="http://$${local_ip_v4}:9001"/>
+  </settings>
+</configuration>
