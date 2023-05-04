@@ -31,6 +31,7 @@
  */
 #include "mod_call_control.h"
 #include "call_control_webhook.h"
+#include "call_control_api.h"
 
 globals_t globals;
 
@@ -167,6 +168,12 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 		goto done;
 	}
 
+	if (start_api(globals.cc_api_host, globals.cc_api_port) != SWITCH_STATUS_SUCCESS) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't start API!\n");
+		status = SWITCH_STATUS_FALSE;
+		goto done;
+	}
+
 	SWITCH_ADD_API(api_interface, "call_control", "Call Control API", call_control_function, "<command> <uuid> <webhook>");
 	SWITCH_ADD_APP(app_interface, "call_control", "Start Call Control for current session", "", call_control_app_function, "<webhook>", SAF_NONE);
 	switch_console_set_complete("add call_control start <uuid> <webhook>");
@@ -180,6 +187,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_call_control_shutdown)
 {
 	switch_event_unbind_callback(webhook_event_handler);
+
+	stop_api();
 
 	switch_mutex_lock(globals.hash_mutex);
 	switch_core_hash_destroy(&globals.tasks_hash);
