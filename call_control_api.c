@@ -32,7 +32,7 @@
 #include "mod_call_control.h"
 #include "call_control_api.h"
 
-switch_status_t start_api(char *host, char *port)
+switch_status_t start_api(char *host, int port)
 {
 	
 	return SWITCH_STATUS_SUCCESS;

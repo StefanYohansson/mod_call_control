@@ -78,7 +78,7 @@ SWITCH_STANDARD_API(call_control_function)
 	static const char usage_string[] = "USAGE:\n"
 		"--------------------------------------------------------------------------------\n"
 		"call_control start <uuid> <webhook>\n"
-		"call_control stop <uuid> <webhook>\n"
+		"call_control stop <uuid>\n"
 		"call_control status all\n"
 		"--------------------------------------------------------------------------------\n";
 
@@ -124,12 +124,19 @@ SWITCH_STANDARD_API(call_control_function)
 				goto done;
 			}
 		} else if (!strcasecmp(argv[0], "stop")) {
-			if (stop_session_webhook(session) == SWITCH_STATUS_FALSE) {
-				stream->write_function(stream, "-ERR Cannot stop for this session\n");
-			} else {
-				stream->write_function(stream, "+OK Call Control stopped for uuid\n");
-			}
-			goto done;
+            switch_core_session_t *session = NULL;
+            if ((session = switch_core_session_locate(argv[1]))) {
+                if (stop_session_webhook(session) == SWITCH_STATUS_FALSE) {
+                    stream->write_function(stream, "-ERR Cannot stop for this session\n");
+                } else {
+                    stream->write_function(stream, "+OK Call Control stopped for uuid\n");
+                }
+                switch_core_session_rwunlock(session);
+                goto done;
+            } else {
+                stream->write_function(stream, "-ERR UUID not found\n");
+                goto done;
+            }
 		} else if (!strcasecmp(argv[0], "status")) {
 			webhooks_status(stream);
 		} else {
@@ -172,12 +179,12 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't start API!\n");
 		status = SWITCH_STATUS_FALSE;
 		goto done;
-	}
+    }
 
 	SWITCH_ADD_API(api_interface, "call_control", "Call Control API", call_control_function, "<command> <uuid> <webhook>");
 	SWITCH_ADD_APP(app_interface, "call_control", "Start Call Control for current session", "", call_control_app_function, "<webhook>", SAF_NONE);
 	switch_console_set_complete("add call_control start <uuid> <webhook>");
-	switch_console_set_complete("add call_control stop <uuid> <webhook>");
+	switch_console_set_complete("add call_control stop <uuid>");
 	switch_console_set_complete("add call_control status all");
 
  done:

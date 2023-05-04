@@ -36,7 +36,7 @@
 #include <switch.h>
 #include <switch_curl.h>
 
-switch_status_t start_api(char *host, char *port);
+switch_status_t start_api(char *host, int port);
 switch_status_t stop_api();
 
 #endif

@@ -32,6 +32,28 @@
 #include "mod_call_control.h"
 #include "call_control_webhook.h"
 
+static switch_status_t my_on_destroy(switch_core_session_t *session)
+{
+    switch_assert(session);
+    return stop_session_webhook(session);
+}
+
+static switch_state_handler_table_t state_handlers = {
+        /*.on_init */ NULL,
+        /*.on_routing */ NULL,
+        /*.on_execute */ NULL,
+        /*.on_hangup */ NULL,
+        /*.on_exchange_media */ NULL,
+        /*.on_soft_execute */ NULL,
+        /*.on_consume_media */ NULL,
+        /*.on_hibernate */ NULL,
+        /*.on_reset */ NULL,
+        /*.on_park */ NULL,
+        /*.on_reporting */ NULL,
+        /*.on_destroy */ my_on_destroy,
+                      SSH_FLAG_STICKY
+};
+
 void webhook_event_handler(switch_event_t *event)
 {
 	cc_task_t *task = NULL;
@@ -164,6 +186,7 @@ void webhook_event_handler(switch_event_t *event)
 
 switch_status_t start_session_webhook(switch_core_session_t *session, char *webhook_url)
 {
+    switch_channel_t *channel = NULL;
 	cc_task_t *task = NULL;
 	const char *session_uuid = NULL;
 	switch_memory_pool_t *task_pool;
@@ -205,6 +228,11 @@ switch_status_t start_session_webhook(switch_core_session_t *session, char *webh
 	switch_core_hash_insert(globals.tasks_hash, task->uuid, task);
 	switch_mutex_unlock(globals.hash_mutex);
 
+    channel = switch_core_session_get_channel(session);
+    if (channel) {
+        switch_channel_add_state_handler(channel, &state_handlers);
+    }
+
 	return SWITCH_STATUS_SUCCESS;
 }
 
@@ -214,27 +242,22 @@ switch_status_t stop_session_webhook(switch_core_session_t *session)
 	const char *session_uuid = NULL;
 
 	if (!session) {
-		return SWITCH_STATUS_FALSE;
+        return SWITCH_STATUS_FALSE;
 	}
 
 	session_uuid = switch_core_session_get_uuid(session);
 
 	switch_mutex_lock(globals.hash_mutex);
 	if ((task = switch_core_hash_find(globals.tasks_hash, session_uuid))) {
-		switch_mutex_unlock(globals.hash_mutex);
-		return SWITCH_STATUS_FALSE;
-	}
-	switch_mutex_unlock(globals.hash_mutex);
+        if (task->running == 1) {
+            task->running = 0;
+        }
 
-	switch_mutex_lock(task->mutex);
-	if (task->running == 1) {
-		task->running = 0;
-	}
-	switch_mutex_unlock(task->mutex);
-
-	switch_core_destroy_memory_pool(&task->pool);
-	switch_mutex_lock(globals.hash_mutex);
-	switch_core_hash_delete(globals.tasks_hash, task->uuid);
+        switch_core_destroy_memory_pool(&task->pool);
+        switch_mutex_lock(globals.hash_mutex);
+        switch_core_hash_delete(globals.tasks_hash, task->uuid);
+        switch_mutex_unlock(globals.hash_mutex);
+    }
 	switch_mutex_unlock(globals.hash_mutex);
 
 	return SWITCH_STATUS_SUCCESS;
