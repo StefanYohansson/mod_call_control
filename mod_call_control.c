@@ -39,16 +39,21 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_call_control_shutdown);
 SWITCH_MODULE_RUNTIME_FUNCTION(mod_call_control_runtime);
 SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load);
 
-SWITCH_MODULE_DEFINITION(mod_call_control, mod_call_control_load, mod_call_control_shutdown, NULL);
+SWITCH_MODULE_DEFINITION(mod_call_control, mod_call_control_load, mod_call_control_shutdown, NULL
+);
 
-static switch_xml_config_int_options_t config_opt_cc_api_port = { SWITCH_TRUE, 1, SWITCH_TRUE, 65535 };
+static switch_xml_config_int_options_t config_opt_cc_api_port = {SWITCH_TRUE, 1, SWITCH_TRUE, 65535};
 
 static switch_xml_config_item_t instructions[] = {
-	SWITCH_CONFIG_ITEM("webhook-allowed-events", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.webhook_allowed_events, "ALL", NULL, NULL, NULL),
-	SWITCH_CONFIG_ITEM("cc-api-host", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.cc_api_host, "localhost", NULL, NULL, NULL),
-	SWITCH_CONFIG_ITEM("cc-api-external", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.cc_api_external, "http://localhost:8055", NULL, NULL, NULL),
-	SWITCH_CONFIG_ITEM("cc-api-port", SWITCH_CONFIG_INT, CONFIG_RELOADABLE, &globals.cc_api_port, (void *) 8055, &config_opt_cc_api_port, NULL, NULL),
-	SWITCH_CONFIG_ITEM_END()
+		SWITCH_CONFIG_ITEM("webhook-allowed-events", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE,
+		                   &globals.webhook_allowed_events, "ALL", NULL, NULL, NULL),
+		SWITCH_CONFIG_ITEM("cc-api-host", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.cc_api_host, "localhost", NULL,
+		                   NULL, NULL),
+		SWITCH_CONFIG_ITEM("cc-api-external", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.cc_api_external,
+		                   "http://localhost:8055", NULL, NULL, NULL),
+		SWITCH_CONFIG_ITEM("cc-api-port", SWITCH_CONFIG_INT, CONFIG_RELOADABLE, &globals.cc_api_port, (void *) 8055,
+		                   &config_opt_cc_api_port, NULL, NULL),
+		SWITCH_CONFIG_ITEM_END()
 };
 
 static switch_status_t do_config(switch_bool_t reload)
@@ -65,7 +70,7 @@ static switch_status_t do_config(switch_bool_t reload)
 
 SWITCH_STANDARD_APP(call_control_app_function)
 {
-	start_session_webhook(session, (char *)data);
+	start_session_webhook(session, (char *) data);
 }
 
 SWITCH_STANDARD_API(call_control_function)
@@ -76,11 +81,11 @@ SWITCH_STANDARD_API(call_control_function)
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
 
 	static const char usage_string[] = "USAGE:\n"
-		"--------------------------------------------------------------------------------\n"
-		"call_control start <uuid> <webhook>\n"
-		"call_control stop <uuid>\n"
-		"call_control status all\n"
-		"--------------------------------------------------------------------------------\n";
+	"--------------------------------------------------------------------------------\n"
+	"call_control start <uuid> <webhook>\n"
+	"call_control stop <uuid>\n"
+	"call_control status all\n"
+	"--------------------------------------------------------------------------------\n";
 
 	if (zstr(cmd)) {
 		stream->write_function(stream, "%s", usage_string);
@@ -124,19 +129,19 @@ SWITCH_STANDARD_API(call_control_function)
 				goto done;
 			}
 		} else if (!strcasecmp(argv[0], "stop")) {
-            switch_core_session_t *session = NULL;
-            if ((session = switch_core_session_locate(argv[1]))) {
-                if (stop_session_webhook(session) == SWITCH_STATUS_FALSE) {
-                    stream->write_function(stream, "-ERR Cannot stop for this session\n");
-                } else {
-                    stream->write_function(stream, "+OK Call Control stopped for uuid\n");
-                }
-                switch_core_session_rwunlock(session);
-                goto done;
-            } else {
-                stream->write_function(stream, "-ERR UUID not found\n");
-                goto done;
-            }
+			switch_core_session_t *session = NULL;
+			if ((session = switch_core_session_locate(argv[1]))) {
+				if (stop_session_webhook(session) == SWITCH_STATUS_FALSE) {
+					stream->write_function(stream, "-ERR Cannot stop for this session\n");
+				} else {
+					stream->write_function(stream, "+OK Call Control stopped for uuid\n");
+				}
+				switch_core_session_rwunlock(session);
+				goto done;
+			} else {
+				stream->write_function(stream, "-ERR UUID not found\n");
+				goto done;
+			}
 		} else if (!strcasecmp(argv[0], "status")) {
 			webhooks_status(stream);
 		} else {
@@ -148,7 +153,7 @@ SWITCH_STANDARD_API(call_control_function)
 		goto done;
 	}
 
- done:
+	done:
 	switch_safe_free(mycmd);
 	return status;
 }
@@ -179,7 +184,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't start API!\n");
 		status = SWITCH_STATUS_FALSE;
 		goto done;
-    }
+	}
 
 	SWITCH_ADD_API(api_interface, "call_control", "Call Control API", call_control_function, "<command> <uuid> <webhook>");
 	SWITCH_ADD_APP(app_interface, "call_control", "Start Call Control for current session", "", call_control_app_function, "<webhook>", SAF_NONE);
@@ -187,7 +192,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 	switch_console_set_complete("add call_control stop <uuid>");
 	switch_console_set_complete("add call_control status all");
 
- done:
+	done:
 	return status;
 }
 

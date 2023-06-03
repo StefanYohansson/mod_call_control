@@ -34,24 +34,24 @@
 
 static switch_status_t my_on_destroy(switch_core_session_t *session)
 {
-    switch_assert(session);
-    return stop_session_webhook(session);
+	switch_assert(session);
+	return stop_session_webhook(session);
 }
 
 static switch_state_handler_table_t state_handlers = {
-        /*.on_init */ NULL,
-        /*.on_routing */ NULL,
-        /*.on_execute */ NULL,
-        /*.on_hangup */ NULL,
-        /*.on_exchange_media */ NULL,
-        /*.on_soft_execute */ NULL,
-        /*.on_consume_media */ NULL,
-        /*.on_hibernate */ NULL,
-        /*.on_reset */ NULL,
-        /*.on_park */ NULL,
-        /*.on_reporting */ NULL,
-        /*.on_destroy */ my_on_destroy,
-                      SSH_FLAG_STICKY
+		/*.on_init */ NULL,
+		/*.on_routing */ NULL,
+		/*.on_execute */ NULL,
+		/*.on_hangup */ NULL,
+		/*.on_exchange_media */ NULL,
+		/*.on_soft_execute */ NULL,
+		/*.on_consume_media */ NULL,
+		/*.on_hibernate */ NULL,
+		/*.on_reset */ NULL,
+		/*.on_park */ NULL,
+		/*.on_reporting */ NULL,
+		/*.on_destroy */ my_on_destroy,
+		              SSH_FLAG_STICKY
 };
 
 void webhook_event_handler(switch_event_t *event)
@@ -70,8 +70,8 @@ void webhook_event_handler(switch_event_t *event)
 	ks_pool_t *ks_pool = NULL;
 	char *json_str = NULL;
 	char *req = NULL;
-	struct response_data rd = { 0 };
-	char *allowed_events[1024] = { 0 };
+	struct response_data rd = {0};
+	char *allowed_events[1024] = {0};
 	int allowed_events_count = 0;
 
 	switch_assert(event);
@@ -90,7 +90,7 @@ void webhook_event_handler(switch_event_t *event)
 	}
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Looking for task\n", uuid, event_name);
-	
+
 	switch_mutex_lock(globals.hash_mutex);
 	if ((task = switch_core_hash_find(globals.tasks_hash, uuid))) {
 		int should_dispatch = 0;
@@ -103,7 +103,8 @@ void webhook_event_handler(switch_event_t *event)
 			goto done;
 		}
 
-		allowed_events_count = switch_separate_string(globals.webhook_allowed_events, ',', allowed_events, (sizeof(allowed_events) / sizeof(allowed_events[0])));
+		allowed_events_count = switch_separate_string(globals.webhook_allowed_events, ',', allowed_events,
+		                                              (sizeof(allowed_events) / sizeof(allowed_events[0])));
 		for (int i = 0; i < allowed_events_count; i++) {
 			if (!strcasecmp(event_name, allowed_events[i]) || !strcasecmp("ALL", allowed_events[i])) {
 				should_dispatch = 1;
@@ -146,8 +147,10 @@ void webhook_event_handler(switch_event_t *event)
 				switch_curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 				//switch_curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&rd);
 
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Dispatching to webhook %s\n", uuid, event_name, task->webhook_uri);
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Dispatching json %s\n", uuid, event_name, json_str);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Dispatching to webhook %s\n", uuid,
+				                  event_name, task->webhook_uri);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Dispatching json %s\n", uuid, event_name,
+				                  json_str);
 				if ((res = switch_curl_easy_perform(curl))) {
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Curl Result %d, Error: %s\n", res, errbuf);
 
@@ -161,21 +164,25 @@ void webhook_event_handler(switch_event_t *event)
 					}
 				}
 			} else {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "[%s] [%s] Cannot serialize event to json, ignoring...\n", uuid, event_name);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
+				                  "[%s] [%s] Cannot serialize event to json, ignoring...\n", uuid, event_name);
 			}
 		} else {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Event not allowed in whitelist, ignoring...\n", uuid, event_name);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Event not allowed in whitelist, ignoring...\n",
+			                  uuid, event_name);
 		}
 
 		if (task->fail_count >= MAX_FAIL_COUNT && task->running == 1) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "[%s] [%s] Reached max retries to reach webhook %s, stopping task...\n", uuid, event_name, task->webhook_uri);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+			                  "[%s] [%s] Reached max retries to reach webhook %s, stopping task...\n", uuid, event_name,
+			                  task->webhook_uri);
 			task->running = 0;
 		}
 		switch_mutex_unlock(task->mutex);
 	}
 	switch_mutex_unlock(globals.hash_mutex);
 
- done:
+	done:
 	if (ks_pool)
 		ks_pool_close(&ks_pool);
 
@@ -186,7 +193,7 @@ void webhook_event_handler(switch_event_t *event)
 
 switch_status_t start_session_webhook(switch_core_session_t *session, char *webhook_url)
 {
-    switch_channel_t *channel = NULL;
+	switch_channel_t *channel = NULL;
 	cc_task_t *task = NULL;
 	const char *session_uuid = NULL;
 	switch_memory_pool_t *task_pool;
@@ -228,10 +235,10 @@ switch_status_t start_session_webhook(switch_core_session_t *session, char *webh
 	switch_core_hash_insert(globals.tasks_hash, task->uuid, task);
 	switch_mutex_unlock(globals.hash_mutex);
 
-    channel = switch_core_session_get_channel(session);
-    if (channel) {
-        switch_channel_add_state_handler(channel, &state_handlers);
-    }
+	channel = switch_core_session_get_channel(session);
+	if (channel) {
+		switch_channel_add_state_handler(channel, &state_handlers);
+	}
 
 	return SWITCH_STATUS_SUCCESS;
 }
@@ -242,22 +249,22 @@ switch_status_t stop_session_webhook(switch_core_session_t *session)
 	const char *session_uuid = NULL;
 
 	if (!session) {
-        return SWITCH_STATUS_FALSE;
+		return SWITCH_STATUS_FALSE;
 	}
 
 	session_uuid = switch_core_session_get_uuid(session);
 
 	switch_mutex_lock(globals.hash_mutex);
 	if ((task = switch_core_hash_find(globals.tasks_hash, session_uuid))) {
-        if (task->running == 1) {
-            task->running = 0;
-        }
+		if (task->running == 1) {
+			task->running = 0;
+		}
 
-        switch_core_destroy_memory_pool(&task->pool);
-        switch_mutex_lock(globals.hash_mutex);
-        switch_core_hash_delete(globals.tasks_hash, task->uuid);
-        switch_mutex_unlock(globals.hash_mutex);
-    }
+		switch_core_destroy_memory_pool(&task->pool);
+		switch_mutex_lock(globals.hash_mutex);
+		switch_core_hash_delete(globals.tasks_hash, task->uuid);
+		switch_mutex_unlock(globals.hash_mutex);
+	}
 	switch_mutex_unlock(globals.hash_mutex);
 
 	return SWITCH_STATUS_SUCCESS;
@@ -279,7 +286,8 @@ void webhooks_status(switch_stream_handle_t *stream)
 		switch_core_hash_this(hi, &vvar, NULL, &val);
 		task = (cc_task_t *) val;
 
-		stream->write_function(stream, "%25s\t%s\t  %d\t%s\n", task->uuid, task->webhook_uri, task->fail_count, task->running ? "Yes" : "No");
+		stream->write_function(stream, "%25s\t%s\t  %d\t%s\n", task->uuid, task->webhook_uri, task->fail_count,
+		                       task->running ? "Yes" : "No");
 	}
 	stream->write_function(stream, line);
 	switch_mutex_unlock(globals.hash_mutex);
