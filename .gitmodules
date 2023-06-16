@@ -1,0 +1,3 @@
+[submodule "deps/onion"]
+	path = deps/onion
+	url = https://github.com/davidmoreno/onion.git

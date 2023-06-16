@@ -33,6 +33,7 @@
 #ifndef CALL_CONTROL_API_H
 #define CALL_CONTROL_API_H
 
+#include <onion/onion.h>
 #include <switch.h>
 #include <switch_curl.h>
 

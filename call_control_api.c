@@ -34,7 +34,7 @@
 
 switch_status_t start_api(char *host, int port)
 {
-	
+
 	return SWITCH_STATUS_SUCCESS;
 }
 
