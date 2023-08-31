@@ -33,11 +33,23 @@
 #ifndef CALL_CONTROL_API_H
 #define CALL_CONTROL_API_H
 
+#include <string.h>
+#include <ctype.h>
+#include <stdbool.h>
+
 #include <onion/onion.h>
+#include <onion/dict.h>
+#include <onion/block.h>
+#include <onion/request.h>
+#include <onion/response.h>
+#include <onion/url.h>
+#include <onion/low.h>
+
 #include <switch.h>
 #include <switch_curl.h>
 
-switch_status_t start_api(char *host, int port);
+
+switch_status_t start_api(char *host, char *port);
 switch_status_t stop_api();
 
 #endif

@@ -42,8 +42,6 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load);
 SWITCH_MODULE_DEFINITION(mod_call_control, mod_call_control_load, mod_call_control_shutdown, NULL
 );
 
-static switch_xml_config_int_options_t config_opt_cc_api_port = {SWITCH_TRUE, 1, SWITCH_TRUE, 65535};
-
 static switch_xml_config_item_t instructions[] = {
 		SWITCH_CONFIG_ITEM("webhook-allowed-events", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE,
 		                   &globals.webhook_allowed_events, "ALL", NULL, NULL, NULL),
@@ -51,8 +49,12 @@ static switch_xml_config_item_t instructions[] = {
 		                   NULL, NULL),
 		SWITCH_CONFIG_ITEM("cc-api-external", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.cc_api_external,
 		                   "http://localhost:8055", NULL, NULL, NULL),
-		SWITCH_CONFIG_ITEM("cc-api-port", SWITCH_CONFIG_INT, CONFIG_RELOADABLE, &globals.cc_api_port, (void *) 8055,
-		                   &config_opt_cc_api_port, NULL, NULL),
+		SWITCH_CONFIG_ITEM("cc-db", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.dbname,
+		                   CC_SQLITE_DB_NAME, NULL, NULL, NULL),
+		SWITCH_CONFIG_ITEM("cc-db-dsn", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.odbc_dsn,
+		                   "", NULL, NULL, NULL),
+		SWITCH_CONFIG_ITEM("cc-api-port", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.cc_api_port, "8055",
+		                   NULL, NULL, NULL),
 		SWITCH_CONFIG_ITEM_END()
 };
 
@@ -114,7 +116,7 @@ SWITCH_STANDARD_API(call_control_function)
 			if ((session = switch_core_session_locate(argv[1]))) {
 				char *webhook_url = NULL;
 
-				if (argc > 1 && !zstr(argv[2])) {
+				if (!zstr(argv[2])) {
 					webhook_url = argv[2];
 				}
 				if (start_session_webhook(session, webhook_url) == SWITCH_STATUS_FALSE) {
@@ -176,6 +178,12 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 
 	if (switch_event_bind(modname, SWITCH_EVENT_ALL, SWITCH_EVENT_SUBCLASS_ANY, webhook_event_handler, NULL) != SWITCH_STATUS_SUCCESS) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't bind!\n");
+		status = SWITCH_STATUS_FALSE;
+		goto done;
+	}
+
+	if (init_webhook() != SWITCH_STATUS_SUCCESS) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't init webhook DB!\n");
 		status = SWITCH_STATUS_FALSE;
 		goto done;
 	}

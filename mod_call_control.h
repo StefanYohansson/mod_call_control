@@ -36,16 +36,29 @@
 #include <switch.h>
 #include <switch_curl.h>
 #include "ks.h"
+#include <onion/onion.h>
 
 #define MAX_FAIL_COUNT 10
+#define CC_SQLITE_DB_NAME "call_control"
+
+struct cc_api_server {
+	onion *server;
+	switch_memory_pool_t *pool;
+};
+typedef struct cc_api_server cc_api_server_t;
 
 typedef struct {
 	char *webhook_allowed_events;
 	char *cc_api_host;
 	char *cc_api_external;
-	int cc_api_port;
+	char *cc_api_port;
+	char *odbc_dsn;
+	char *dbname;
+	cc_api_server_t *api_server;
 	switch_hash_t *tasks_hash;
 	switch_mutex_t *hash_mutex;
+	switch_mutex_t *mutex;
+	switch_bool_t global_database_lock;
 } globals_t;
 
 struct cc_task {

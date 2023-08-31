@@ -35,7 +35,9 @@
 
 #include <switch.h>
 #include <switch_curl.h>
+#include <switch_core_db.h>
 
+switch_status_t init_webhook();
 void webhook_event_handler(switch_event_t *event);
 switch_status_t start_session_webhook(switch_core_session_t *session, char *webhook_url);
 switch_status_t stop_session_webhook(switch_core_session_t *session);

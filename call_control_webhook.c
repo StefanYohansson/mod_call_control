@@ -32,6 +32,13 @@
 #include "mod_call_control.h"
 #include "call_control_webhook.h"
 
+static char webhooks_sql[] =
+		"CREATE TABLE IF NOT EXISTS webhooks (\n"
+		"   webhook_url	     VARCHAR(255) NOT NULL,\n"
+		"   uuid	     VARCHAR(255) NOT NULL,\n"
+		"   running   BOOLEAN,\n"
+		"   fail_count	     INTEGER\n" ");\n";
+
 static switch_status_t my_on_destroy(switch_core_session_t *session)
 {
 	switch_assert(session);
@@ -158,7 +165,7 @@ void webhook_event_handler(switch_event_t *event)
 				} else {
 					switch_curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &rescode);
 
-					if (rescode != 200) {
+					if (rescode >= 200 && rescode < 300) {
 						//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "[%s] [%s] Event delivery failed with HTTP code %ld, %s\n", uuid, event_name, rescode, rd.data);
 						task->fail_count = task->fail_count + 1;
 					}
@@ -188,7 +195,85 @@ void webhook_event_handler(switch_event_t *event)
 
 	switch_safe_free(rd.data);
 	switch_safe_free(req);
-	return;
+}
+
+switch_cache_db_handle_t *cc_get_db_handle(void)
+{
+	switch_cache_db_handle_t *dbh = NULL;
+	char *dsn;
+
+	if (!zstr(globals.odbc_dsn)) {
+		dsn = globals.odbc_dsn;
+	} else {
+		dsn = globals.dbname;
+	}
+
+	if (switch_cache_db_get_db_handle_dsn(&dbh, dsn) != SWITCH_STATUS_SUCCESS) {
+		dbh = NULL;
+	}
+
+	return dbh;
+}
+
+static switch_status_t cc_execute_sql(char *sql, switch_mutex_t *mutex)
+{
+	switch_cache_db_handle_t *dbh = NULL;
+	switch_status_t status = SWITCH_STATUS_FALSE;
+
+	if (globals.global_database_lock) {
+		if (mutex) {
+			switch_mutex_lock(mutex);
+		} else {
+			switch_mutex_lock(globals.mutex);
+		}
+	}
+
+	if (!(dbh = cc_get_db_handle())) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error Opening DB\n");
+		goto end;
+	}
+
+	status = switch_cache_db_execute_sql(dbh, sql, NULL);
+
+	end:
+
+	switch_cache_db_release_db_handle(&dbh);
+
+	if (globals.global_database_lock) {
+		if (mutex) {
+			switch_mutex_unlock(mutex);
+		} else {
+			switch_mutex_unlock(globals.mutex);
+		}
+	}
+
+	return status;
+}
+
+static switch_status_t insert_webhook_db(cc_task_t *task)
+{
+	switch_status_t status = SWITCH_STATUS_FALSE;
+	char *sql;
+	sql = switch_mprintf("INSERT INTO webhooks (webhook_url, uuid, running, fail_count) VALUES('%q', '%q', '%q', '%q');",
+	                     task->webhook_uri, task->uuid, task->running, task->fail_count);
+	status = cc_execute_sql(sql, NULL);
+	switch_safe_free(sql);
+	return status;
+}
+
+static switch_status_t remove_webhook_db(cc_task_t *task)
+{
+	switch_status_t status = SWITCH_STATUS_FALSE;
+	char *sql;
+	sql = switch_mprintf("DELETE FROM webhooks WHERE uuid = '%q';", task->uuid);
+	status = cc_execute_sql(sql, NULL);
+	switch_safe_free(sql);
+	return status;
+}
+
+switch_status_t init_webhook()
+{
+	return cc_execute_sql(webhooks_sql, NULL);
 }
 
 switch_status_t start_session_webhook(switch_core_session_t *session, char *webhook_url)
@@ -240,6 +325,10 @@ switch_status_t start_session_webhook(switch_core_session_t *session, char *webh
 		switch_channel_add_state_handler(channel, &state_handlers);
 	}
 
+	if (insert_webhook_db(task) != SWITCH_STATUS_SUCCESS) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error inserting webhook to DB\n");
+	}
+
 	return SWITCH_STATUS_SUCCESS;
 }
 
@@ -258,6 +347,10 @@ switch_status_t stop_session_webhook(switch_core_session_t *session)
 	if ((task = switch_core_hash_find(globals.tasks_hash, session_uuid))) {
 		if (task->running == 1) {
 			task->running = 0;
+		}
+
+		if (remove_webhook_db(task) != SWITCH_STATUS_SUCCESS) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error removing webhook from DB\n");
 		}
 
 		switch_core_destroy_memory_pool(&task->pool);
