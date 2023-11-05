@@ -65,6 +65,7 @@ void webhook_event_handler(switch_event_t *event)
 {
 	cc_task_t *task = NULL;
 	const char *uuid = NULL;
+	const char *background_job_uuid = NULL;
 	const char *event_name = NULL;
 	switch_CURL *curl = NULL;
 	switch_curl_slist_t *headers = NULL;
@@ -86,9 +87,18 @@ void webhook_event_handler(switch_event_t *event)
 	uuid = switch_event_get_header(event, "Unique-ID");
 	event_name = switch_event_name(event->event_id);
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Event name %s\n", event_name);
-	if (zstr(uuid)) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "No Unique-ID in the event, ignoring...\n");
-		goto done;
+
+	if (!strcasecmp(event_name, "BACKGROUND_JOB")) {
+		background_job_uuid = switch_event_get_header(event, "Job-UUID");
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Searching for background job %s registered...\n", background_job_uuid);
+		switch_mutex_lock(globals.backgroud_tasks_mutex);
+		uuid = switch_core_hash_find(globals.background_tasks_hash, background_job_uuid);
+		switch_mutex_unlock(globals.backgroud_tasks_mutex);
+	} else {
+		if (zstr(uuid)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "No Unique-ID in the event, ignoring...\n");
+			goto done;
+		}
 	}
 
 	if (zstr(event_name)) {
@@ -193,6 +203,12 @@ void webhook_event_handler(switch_event_t *event)
 	if (ks_pool)
 		ks_pool_close(&ks_pool);
 
+	if (!zstr(background_job_uuid)) {
+		switch_mutex_lock(globals.backgroud_tasks_mutex);
+		switch_core_hash_delete(globals.background_tasks_hash, background_job_uuid);
+		switch_mutex_unlock(globals.backgroud_tasks_mutex);
+	}
+
 	switch_safe_free(rd.data);
 	switch_safe_free(req);
 }
@@ -254,7 +270,7 @@ static switch_status_t insert_webhook_db(cc_task_t *task)
 {
 	switch_status_t status = SWITCH_STATUS_FALSE;
 	char *sql;
-	sql = switch_mprintf("INSERT INTO webhooks (webhook_url, uuid, running, fail_count) VALUES('%q', '%q', '%q', '%q');",
+	sql = switch_mprintf("INSERT INTO webhooks (webhook_url, uuid, running, fail_count) VALUES('%q', '%q', '%d', '%d');",
 	                     task->webhook_uri, task->uuid, task->running, task->fail_count);
 	status = cc_execute_sql(sql, NULL);
 	switch_safe_free(sql);

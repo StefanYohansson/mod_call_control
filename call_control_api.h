@@ -36,6 +36,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <regex.h>
 
 #include <onion/onion.h>
 #include <onion/dict.h>

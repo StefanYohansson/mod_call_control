@@ -41,6 +41,23 @@ static bool safe_strcmp(const char *a, const char *b)
 	return strcmp(a, b) == 0;
 }
 
+int match(const char *string, char *pattern)
+{
+	int    status;
+	regex_t    re;
+
+
+	if (regcomp(&re, pattern, REG_EXTENDED|REG_NOSUB) != 0) {
+		return(0);
+	}
+	status = regexec(&re, string, (size_t) 0, NULL, 0);
+	regfree(&re);
+	if (status != 0) {
+		return(0);
+	}
+	return(1);
+}
+
 static onion_connection_status execute_api(void *_, onion_request *req,
                                            onion_response *res)
 {
@@ -49,9 +66,12 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 	onion_dict *jreq = NULL;
 	cc_task_t *task = NULL;
 	onion_dict *jres = onion_dict_new();
-	onion_block *jresb = onion_dict_to_json(jres);
+	onion_block *jresb = NULL;
 	switch_stream_handle_t stream = { 0 };
 	char *command, *args, *task_uuid, *secret;
+	char *allowed_events[4098] = {0};
+	int allowed_events_count = 0;
+	int should_allow = 0;
 
 	SWITCH_STANDARD_STREAM(stream);
 
@@ -64,7 +84,7 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 		secret = onion_low_strdup(onion_dict_rget(jreq, "params", "secret", NULL));
 
 		//debug
-		//onion_dict_print_dot(jreq);
+		// onion_dict_print_dot(jreq);
 
 		/// Check is the proper call.
 		if (!safe_strcmp(onion_dict_get(jreq, "jsonrpc"), "2.0")) {
@@ -74,13 +94,10 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 		}
 
 		// verify allowed methods
-		if (
-				!safe_strcmp(onion_dict_get(jreq, "method"), "api") ||
-				!safe_strcmp(onion_dict_get(jreq, "method"), "bgapi") ||
-				!safe_strcmp(onion_dict_get(jreq, "method"), "status") ||
-				!safe_strcmp(onion_dict_get(jreq, "method"), "run") ||
-				!safe_strcmp(onion_dict_get(jreq, "method"), "stop")
-				) {
+		if (!(
+			safe_strcmp(onion_dict_get(jreq, "method"), "api") ||
+			safe_strcmp(onion_dict_get(jreq, "method"), "bgapi")
+		)) {
 			onion_response_printf(res,
 			                      "{\"jsonrpc\": \"2.0\", \"error\": {\"code\": -32601, \"message\": \"Method not found\"}, \"id\": \"%s\"}",
 			                      onion_dict_get(jreq, "id")
@@ -90,7 +107,7 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 
 		// verify token matches the session
 		if ((task = switch_core_hash_find(globals.tasks_hash, task_uuid))) {
-			if (!strcasecmp(task->uuid_secret, secret)) {
+			if (!safe_strcmp(task->uuid_secret, secret)) {
 				onion_response_printf(res,
 				                      "{\"jsonrpc\": \"2.0\", \"error\": {\"code\": -32001, \"message\": \"Secret didn't match\"}, \"id\": \"%s\"}",
 				                      onion_dict_get(jreq, "id")
@@ -98,8 +115,16 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 				goto done;
 			}
 
-			// list allowed commands here
-			if (strcasecmp("uuid_", command) < 0) {
+			allowed_events_count = switch_separate_string(globals.api_allowed_events, ',', allowed_events,
+			                                              (sizeof(allowed_events) / sizeof(allowed_events[0])));
+			for (int i = 0; i < allowed_events_count; i++) {
+				if (strcasecmp(command, allowed_events[i]) > 0) {
+					should_allow = 1;
+					break;
+				}
+			}
+
+			if (!should_allow) {
 				onion_response_printf(res,
 				                      "{\"jsonrpc\": \"2.0\", \"error\": {\"code\": -32002, \"message\": \"Command not allowed\"}, \"id\": \"%s\"}",
 				                      onion_dict_get(jreq, "id")
@@ -112,13 +137,14 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 				char fg_command[256] = { 0 };
 
 				if (zstr(args)) {
-					switch_snprintf(fg_command, sizeof(fg_command), "%s %s", command, task->uuid);
+					switch_snprintf(fg_command, sizeof(fg_command), "%s", task->uuid);
 				} else {
-					switch_snprintf(fg_command, sizeof(fg_command), "%s %s %s", command, task->uuid, args);
+					switch_snprintf(fg_command, sizeof(fg_command), "%s %s", task->uuid, args);
 				}
-				switch_api_execute("api", fg_command, task->session, &stream);
+				switch_api_execute(command, fg_command, task->session, &stream);
 			} else if (safe_strcmp(onion_dict_get(jreq, "method"), "bgapi")) {
 				char bg_command[256] = { 0 };
+				char *background_job_uuid = NULL;
 
 				if (zstr(args)) {
 					switch_snprintf(bg_command, sizeof(bg_command), "%s %s", command, task->uuid);
@@ -126,6 +152,22 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 					switch_snprintf(bg_command, sizeof(bg_command), "%s %s %s", command, task->uuid, args);
 				}
 				switch_api_execute("bgapi", bg_command, task->session, &stream);
+
+				if (match(
+						stream.data,
+						"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[4][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}"
+						)) {
+					background_job_uuid = switch_core_strdup(task->pool, ((char *)stream.data)+14);
+					background_job_uuid[strlen(background_job_uuid)-1] = '\0';
+
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Found background job uuid: %s\n", background_job_uuid);
+				}
+
+				if (background_job_uuid) {
+					switch_mutex_lock(globals.backgroud_tasks_mutex);
+					switch_core_hash_insert(globals.background_tasks_hash, background_job_uuid, task->uuid);
+					switch_mutex_unlock(globals.backgroud_tasks_mutex);
+				}
 			}
 
 			/// Prepare message
@@ -133,6 +175,7 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 			onion_dict_add(jres, "result", stream.data, OD_DUP_VALUE);
 			onion_dict_add(jres, "id", onion_dict_get(jreq, "id"), 0);
 
+			jresb = onion_dict_to_json(jres);
 			/// Write
 			onion_response_write(res, onion_block_data(jresb), onion_block_size(jresb));
 		}

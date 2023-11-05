@@ -49,6 +49,7 @@ typedef struct cc_api_server cc_api_server_t;
 
 typedef struct {
 	char *webhook_allowed_events;
+	char *api_allowed_events;
 	char *cc_api_host;
 	char *cc_api_external;
 	char *cc_api_port;
@@ -57,6 +58,8 @@ typedef struct {
 	cc_api_server_t *api_server;
 	switch_hash_t *tasks_hash;
 	switch_mutex_t *hash_mutex;
+	switch_hash_t *background_tasks_hash;
+	switch_mutex_t *backgroud_tasks_mutex;
 	switch_mutex_t *mutex;
 	switch_bool_t global_database_lock;
 } globals_t;

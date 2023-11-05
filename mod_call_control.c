@@ -45,6 +45,8 @@ SWITCH_MODULE_DEFINITION(mod_call_control, mod_call_control_load, mod_call_contr
 static switch_xml_config_item_t instructions[] = {
 		SWITCH_CONFIG_ITEM("webhook-allowed-events", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE,
 		                   &globals.webhook_allowed_events, "ALL", NULL, NULL, NULL),
+		SWITCH_CONFIG_ITEM("api-allowed-events", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE,
+		                   &globals.api_allowed_events, "uuid_", NULL, NULL, NULL),
 		SWITCH_CONFIG_ITEM("cc-api-host", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.cc_api_host, "localhost", NULL,
 		                   NULL, NULL),
 		SWITCH_CONFIG_ITEM("cc-api-external", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.cc_api_external,
@@ -174,7 +176,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 	}
 
 	switch_mutex_init(&globals.hash_mutex, SWITCH_MUTEX_NESTED, pool);
+	switch_mutex_init(&globals.backgroud_tasks_mutex, SWITCH_MUTEX_NESTED, pool);
 	switch_core_hash_init(&globals.tasks_hash);
+	switch_core_hash_init(&globals.background_tasks_hash);
 
 	if (switch_event_bind(modname, SWITCH_EVENT_ALL, SWITCH_EVENT_SUBCLASS_ANY, webhook_event_handler, NULL) != SWITCH_STATUS_SUCCESS) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't bind!\n");
