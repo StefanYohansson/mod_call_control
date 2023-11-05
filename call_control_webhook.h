@@ -23,7 +23,7 @@
  *
  * Contributor(s):
  *
- * Stefan Yohansson <sy.fen0@gmail.com>
+ * Stefan Yohansson <stefan.yohansson@agnesit.tech>
  *
  *
  * mod_call_control.c -- Bidirectional communication with external applications without socket through internal REST API and external webhook
