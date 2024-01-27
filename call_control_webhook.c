@@ -175,8 +175,8 @@ void webhook_event_handler(switch_event_t *event)
 				} else {
 					switch_curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &rescode);
 
-					if (rescode >= 200 && rescode < 300) {
-						//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "[%s] [%s] Event delivery failed with HTTP code %ld, %s\n", uuid, event_name, rescode, rd.data);
+					if (rescode >= 300) {
+						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "[%s] [%s] Event delivery failed with HTTP code %ld, %s\n", uuid, event_name, rescode, rd.data);
 						task->fail_count = task->fail_count + 1;
 					}
 				}
