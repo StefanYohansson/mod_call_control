@@ -68,7 +68,7 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 	onion_dict *jres = onion_dict_new();
 	onion_block *jresb = NULL;
 	switch_stream_handle_t stream = { 0 };
-	char *command, *args, *task_uuid, *secret;
+	char *command = NULL, *args = NULL, *task_uuid = NULL, *secret = NULL;
 	char *allowed_events[4098] = {0};
 	int allowed_events_count = 0;
 	int should_allow = 0;
@@ -84,7 +84,9 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 		secret = onion_low_strdup(onion_dict_rget(jreq, "params", "secret", NULL));
 
 		//debug
-		// onion_dict_print_dot(jreq);
+#ifdef CC_DEBUG
+		onion_dict_print_dot(jreq);
+#endif
 
 		/// Check is the proper call.
 		if (!safe_strcmp(onion_dict_get(jreq, "jsonrpc"), "2.0")) {
@@ -189,14 +191,14 @@ static onion_connection_status execute_api(void *_, onion_request *req,
 	}
 
 	done:
-	/// Clean up.
-	switch_safe_free(stream.data);
-	onion_block_free(jresb);
-	onion_dict_free(jres);
-	onion_low_free(command);
-	onion_low_free(args);
-	onion_dict_free(jreq);
-	return fres;
+		/// Clean up.
+		switch_safe_free(stream.data);
+		onion_block_free(jresb);
+		onion_dict_free(jres);
+		onion_low_free(command);
+		onion_low_free(args);
+		onion_dict_free(jreq);
+		return fres;
 }
 
 static void *SWITCH_THREAD_FUNC onion_thread(switch_thread_t *thread, void *obj)
@@ -208,10 +210,10 @@ static void *SWITCH_THREAD_FUNC onion_thread(switch_thread_t *thread, void *obj)
 
 switch_status_t start_api(char *host, char *port)
 {
-	switch_thread_data_t *td;
-	switch_memory_pool_t *api_pool;
+	switch_thread_data_t *td = NULL;
+	switch_memory_pool_t *api_pool = NULL;
 	cc_api_server_t *api_server = NULL;
-	onion_url *url;
+	onion_url *url = NULL;
 
 	switch_core_new_memory_pool(&api_pool);
 

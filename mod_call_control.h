@@ -35,7 +35,7 @@
 
 #include <switch.h>
 #include <switch_curl.h>
-#include "ks.h"
+#include "libks/ks.h"
 #include <onion/onion.h>
 
 #define MAX_FAIL_COUNT 10

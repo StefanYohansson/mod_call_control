@@ -61,6 +61,44 @@ static switch_state_handler_table_t state_handlers = {
 		              SSH_FLAG_STICKY
 };
 
+SWITCH_DECLARE(switch_status_t) switch_event_serialize_jsonks_obj(switch_event_t *event, ks_json_t **json)
+{
+	switch_event_header_t *hp = NULL;
+	ks_json_t *cj = NULL;
+
+	cj = ks_json_create_object();
+
+	for (hp = event->headers; hp; hp = hp->next) {
+		if (hp->idx) {
+			ks_json_t *a = ks_json_create_array();
+			int i;
+
+			for(i = 0; i < hp->idx; i++) {
+				ks_json_add_item_to_array(a, ks_json_create_string(hp->array[i]));
+			}
+
+			ks_json_add_item_to_object(cj, hp->name, a);
+
+		} else {
+			ks_json_add_item_to_object(cj, hp->name, ks_json_create_string(hp->value));
+		}
+	}
+
+	if (event->body) {
+		int blen = (int) strlen(event->body);
+		char tmp[25];
+
+		switch_snprintf(tmp, sizeof(tmp), "%d", blen);
+
+		ks_json_add_item_to_object(cj, "Content-Length", ks_json_create_string(tmp));
+		ks_json_add_item_to_object(cj, "_body", ks_json_create_string(event->body));
+	}
+
+	*json = cj;
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
 void webhook_event_handler(switch_event_t *event)
 {
 	cc_task_t *task = NULL;
@@ -75,7 +113,6 @@ void webhook_event_handler(switch_event_t *event)
 	long rescode;
 	ks_json_t *json_res = NULL;
 	ks_json_t *json_event = NULL;
-	ks_pool_t *ks_pool = NULL;
 	char *json_str = NULL;
 	char *req = NULL;
 	struct response_data rd = {0};
@@ -130,18 +167,17 @@ void webhook_event_handler(switch_event_t *event)
 		}
 
 		if (should_dispatch) {
-			ks_pool_open(&ks_pool);
-			json_event = ks_json_pcreate_object(ks_pool);
+			json_event = ks_json_create_object();
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Event can be dispatched\n", uuid, event_name);
 
-			if (switch_event_serialize_json_obj(event, &json_event) == SWITCH_STATUS_SUCCESS) {
-				json_res = ks_json_pcreate_object(ks_pool);
+			if (switch_event_serialize_jsonks_obj(event, &json_event) == SWITCH_STATUS_SUCCESS) {
+				json_res = ks_json_create_object();
 				ks_json_add_string_to_object(json_res, "api", globals.cc_api_external);
 				ks_json_add_string_to_object(json_res, "uuid", task->uuid);
 				ks_json_add_string_to_object(json_res, "uuid_secret", task->uuid_secret);
 				ks_json_add_item_to_object(json_res, "event", json_event);
 
-				json_str = ks_json_pprint_unformatted(ks_pool, json_res);
+				json_str = ks_json_print_unformatted(json_res);
 
 				curl = switch_curl_easy_init();
 
@@ -162,7 +198,7 @@ void webhook_event_handler(switch_event_t *event)
 				switch_curl_easy_setopt(curl, CURLOPT_USERAGENT, "mod_call_control/1");
 				switch_curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str);
 				switch_curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
-				//switch_curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&rd);
+				switch_curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&rd);
 
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Dispatching to webhook %s\n", uuid,
 				                  event_name, task->webhook_uri);
@@ -200,9 +236,6 @@ void webhook_event_handler(switch_event_t *event)
 	switch_mutex_unlock(globals.hash_mutex);
 
 	done:
-	if (ks_pool)
-		ks_pool_close(&ks_pool);
-
 	if (!zstr(background_job_uuid)) {
 		switch_mutex_lock(globals.backgroud_tasks_mutex);
 		switch_core_hash_delete(globals.background_tasks_hash, background_job_uuid);
