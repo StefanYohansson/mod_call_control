@@ -39,8 +39,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_call_control_shutdown);
 SWITCH_MODULE_RUNTIME_FUNCTION(mod_call_control_runtime);
 SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load);
 
-SWITCH_MODULE_DEFINITION(mod_call_control, mod_call_control_load, mod_call_control_shutdown, NULL
-);
+SWITCH_MODULE_DEFINITION(mod_call_control, mod_call_control_load, mod_call_control_shutdown, NULL);
 
 static switch_xml_config_item_t instructions[] = {
 		SWITCH_CONFIG_ITEM("webhook-allowed-events", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE,
