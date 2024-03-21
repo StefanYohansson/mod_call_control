@@ -36,7 +36,6 @@
 globals_t globals;
 
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_call_control_shutdown);
-SWITCH_MODULE_RUNTIME_FUNCTION(mod_call_control_runtime);
 SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load);
 
 SWITCH_MODULE_DEFINITION(mod_call_control, mod_call_control_load, mod_call_control_shutdown, NULL);
