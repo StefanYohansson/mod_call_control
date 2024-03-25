@@ -208,11 +208,23 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_call_control_shutdown)
 {
+	switch_hash_index_t *hi;
+	void *val;
+	const void *vvar;
+	cc_task_t *task = NULL;
+
 	switch_event_unbind_callback(webhook_event_handler);
 
 	stop_api();
 
 	switch_mutex_lock(globals.hash_mutex);
+	for (hi = switch_core_hash_first(globals.tasks_hash); hi; hi = switch_core_hash_next(&hi)) {
+		switch_core_hash_this(hi, &vvar, NULL, &val);
+		task = (cc_task_t *) val;
+
+		switch_core_destroy_memory_pool(&task->pool);
+	}
+	
 	switch_core_hash_destroy(&globals.tasks_hash);
 	switch_mutex_unlock(globals.hash_mutex);
 
