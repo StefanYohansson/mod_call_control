@@ -403,9 +403,7 @@ switch_status_t stop_session_webhook(switch_core_session_t *session)
 		}
 
 		switch_core_destroy_memory_pool(&task->pool);
-		switch_mutex_lock(globals.hash_mutex);
 		switch_core_hash_delete(globals.tasks_hash, task->uuid);
-		switch_mutex_unlock(globals.hash_mutex);
 	}
 	switch_mutex_unlock(globals.hash_mutex);
 
