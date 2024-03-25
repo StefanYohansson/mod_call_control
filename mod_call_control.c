@@ -228,6 +228,14 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_call_control_shutdown)
 	switch_core_hash_destroy(&globals.tasks_hash);
 	switch_mutex_unlock(globals.hash_mutex);
 
+	switch_mutex_lock(globals.backgroud_tasks_mutex);
+	switch_core_hash_destroy(&globals.background_tasks_hash);
+	switch_mutex_unlock(globals.backgroud_tasks_mutex);
+
+	switch_mutex_destroy(globals.hash_mutex);
+	switch_mutex_destroy(globals.backgroud_tasks_mutex);
+	switch_mutex_destroy(globals.mutex);
+
 	switch_xml_config_cleanup(instructions);
 	return SWITCH_STATUS_SUCCESS;
 }
