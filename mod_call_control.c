@@ -173,6 +173,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_call_control_load)
 		goto done;
 	}
 
+	switch_mutex_init(&globals.mutex, SWITCH_MUTEX_NESTED, pool);
 	switch_mutex_init(&globals.hash_mutex, SWITCH_MUTEX_NESTED, pool);
 	switch_mutex_init(&globals.backgroud_tasks_mutex, SWITCH_MUTEX_NESTED, pool);
 	switch_core_hash_init(&globals.tasks_hash);
