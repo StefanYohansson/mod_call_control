@@ -99,6 +99,21 @@ SWITCH_DECLARE(switch_status_t) switch_event_serialize_jsonks_obj(switch_event_t
 	return SWITCH_STATUS_SUCCESS;
 }
 
+static size_t file_callback(void *ptr, size_t size, size_t nmemb, void *data)
+{
+	register unsigned int realsize = (unsigned int) (size * nmemb);
+
+	// hard coded limit of 5MB
+	if (realsize > 5242880) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Oversized file detected [%d bytes]\n", (int) realsize);
+		return 0;
+	}
+
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "%.*s\n", realsize, (char *)ptr);
+
+	return realsize;
+}
+
 void webhook_event_handler(switch_event_t *event)
 {
 	cc_task_t *task = NULL;
@@ -197,6 +212,7 @@ void webhook_event_handler(switch_event_t *event)
 				switch_curl_easy_setopt(curl, CURLOPT_USERAGENT, "mod_call_control/1");
 				switch_curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str);
 				switch_curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
+				switch_curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, file_callback);
 
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Dispatching to webhook %s\n", uuid,
 				                  event_name, task->webhook_uri);
