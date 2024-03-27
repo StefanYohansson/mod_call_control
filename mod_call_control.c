@@ -223,6 +223,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_call_control_shutdown)
 		switch_core_hash_this(hi, &vvar, NULL, &val);
 		task = (cc_task_t *) val;
 
+		switch_mutex_destroy(task->mutex);
 		switch_core_destroy_memory_pool(&task->pool);
 	}
 	

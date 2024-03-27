@@ -115,7 +115,6 @@ void webhook_event_handler(switch_event_t *event)
 	ks_json_t *json_event = NULL;
 	char *json_str = NULL;
 	char *req = NULL;
-	struct response_data rd = {0};
 	char *allowed_events[1024] = {0};
 	int allowed_events_count = 0;
 
@@ -198,7 +197,6 @@ void webhook_event_handler(switch_event_t *event)
 				switch_curl_easy_setopt(curl, CURLOPT_USERAGENT, "mod_call_control/1");
 				switch_curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str);
 				switch_curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
-				switch_curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&rd);
 
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] [%s] Dispatching to webhook %s\n", uuid,
 				                  event_name, task->webhook_uri);
@@ -212,7 +210,7 @@ void webhook_event_handler(switch_event_t *event)
 					switch_curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &rescode);
 
 					if (rescode >= 300) {
-						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "[%s] [%s] Event delivery failed with HTTP code %ld, %s\n", uuid, event_name, rescode, rd.data);
+						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "[%s] [%s] Event delivery failed with HTTP code %ld\n", uuid, event_name, rescode);
 						task->fail_count = task->fail_count + 1;
 					}
 				}
@@ -242,7 +240,6 @@ void webhook_event_handler(switch_event_t *event)
 		switch_mutex_unlock(globals.backgroud_tasks_mutex);
 	}
 
-	switch_safe_free(rd.data);
 	switch_safe_free(req);
 }
 
