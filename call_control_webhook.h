@@ -39,6 +39,7 @@
 
 switch_status_t init_webhook();
 void webhook_event_handler(switch_event_t *event);
+switch_bool_t has_session_webhook_alive(switch_core_session_t *session);
 switch_status_t start_session_webhook(switch_core_session_t *session, char *webhook_url);
 switch_status_t stop_session_webhook(switch_core_session_t *session);
 void webhooks_status(switch_stream_handle_t *stream);

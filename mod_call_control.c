@@ -72,7 +72,20 @@ static switch_status_t do_config(switch_bool_t reload)
 
 SWITCH_STANDARD_APP(call_control_app_function)
 {
-	start_session_webhook(session, (char *) data);
+	switch_channel_t *channel = NULL;
+	if (start_session_webhook(session, (char *) data) == SWITCH_STATUS_FALSE) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Cannot start for this session\n");
+		return;
+	}
+
+	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Call Control started for uuid\n");
+
+	channel = switch_core_session_get_channel(session);
+
+	while (switch_channel_ready(channel) &&
+		   has_session_webhook_alive(session) == SWITCH_TRUE) {
+		switch_yield(100000);
+	}
 }
 
 SWITCH_STANDARD_API(call_control_function)

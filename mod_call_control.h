@@ -72,7 +72,14 @@ struct cc_task {
 	switch_mutex_t *mutex;
 	switch_memory_pool_t *pool;
 	int fail_count;
+	// this mean that the task is running and sending webhook events
+	// the task could be not running but still exists in the hash
+	// for example when it receives a lot of failures and stop the task
+	// to prevent keep sending events to a webhook that is not working
 	int running;
+	// this mean that the task is not about to be removed
+	// if this is true, the task will be removed from the hash soon
+	int down;
 };
 typedef struct cc_task cc_task_t;
 

@@ -338,6 +338,27 @@ switch_status_t init_webhook()
 	return cc_execute_sql(webhooks_sql, NULL);
 }
 
+switch_bool_t has_session_webhook_alive(switch_core_session_t *session)
+{
+	cc_task_t *task = NULL;
+	const char *session_uuid = NULL;
+	switch_bool_t alive = SWITCH_FALSE;
+
+	if (!session) {
+		return SWITCH_FALSE;
+	}
+
+	session_uuid = switch_core_session_get_uuid(session);
+
+	if ((task = switch_core_hash_find(globals.tasks_hash, session_uuid))) {
+		if (task->down == 0) {
+			alive = SWITCH_TRUE;
+		}
+	}
+
+	return alive;
+}
+
 switch_status_t start_session_webhook(switch_core_session_t *session, char *webhook_url)
 {
 	switch_channel_t *channel = NULL;
@@ -370,6 +391,7 @@ switch_status_t start_session_webhook(switch_core_session_t *session, char *webh
 	task->uuid = switch_core_strdup(task->pool, session_uuid);
 	task->uuid_secret = ks_uuid_str(NULL, &uuid_secret);
 	task->session = session;
+	task->down = 0;
 	task->running = 1;
 	task->fail_count = 0;
 
@@ -409,6 +431,7 @@ switch_status_t stop_session_webhook(switch_core_session_t *session)
 	if ((task = switch_core_hash_find(globals.tasks_hash, session_uuid))) {
 		if (task->running == 1) {
 			task->running = 0;
+			task->down = 1;
 		}
 
 		if (remove_webhook_db(task) != SWITCH_STATUS_SUCCESS) {
